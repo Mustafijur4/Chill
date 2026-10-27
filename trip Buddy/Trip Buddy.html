@@ -1,0 +1,543 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trip Buddy - Expense Manager</title>
+  <link rel="stylesheet" href="style.css">
+
+
+</head>
+
+<body>
+
+<header>
+  <h1>✦ Trip Buddy</h1>
+  <p>Track trip expenses and split bills with friends.</p>
+</header>
+
+<main>
+
+  <!-- Expense summary -->
+  <div class="summary">
+    <div class="card">
+      <div>Total Expenses</div>
+      <div class="metric" id="total">₹0</div>
+    </div>
+
+    <div class="card">
+      <div>Total Paid</div>
+      <div class="metric" id="paid">₹0</div>
+    </div>
+
+    <div class="card">
+      <div>Friends</div>
+      <div class="metric" id="friendCount">0</div>
+    </div>
+
+    <div class="card">
+      <div>Expense Entries</div>
+      <div class="metric" id="expenseCount">0</div>
+    </div>
+  </div>
+
+  <!-- Add friends -->
+  <section class="card">
+    <h2>👥 Friends</h2>
+
+    <label for="friendName">Friend's Name</label>
+    <input id="friendName" placeholder="Enter friend name">
+
+    <button class="primary full" id="addFriend">
+      + Add Friend
+    </button>
+
+    <div id="friends"></div>
+  </section>
+
+  <!-- Add expenses -->
+  <section class="card">
+    <h2>➕ Add Expense</h2>
+
+    <form id="expenseForm">
+
+      <label for="description">Expense Description</label>
+      <input
+        id="description"
+        placeholder="Train tickets, hotel, food..."
+        required
+      >
+
+      <label for="amount">Amount (₹)</label>
+      <input
+        id="amount"
+        type="number"
+        min="0.01"
+        step="0.01"
+        placeholder="2500"
+        required
+      >
+
+      <label for="payer">Who Paid?</label>
+      <select id="payer" required></select>
+
+      <label>Who Shares This Expense?</label>
+      <div id="splitPeople" class="check-list"></div>
+
+      <button class="primary full" type="submit">
+        Save Expense
+      </button>
+
+    </form>
+  </section>
+
+  <!-- Expense history -->
+  <section class="card">
+    <h2>🧾 Expense History</h2>
+
+    <div id="expenses"></div>
+
+    <button class="secondary full" id="export">
+      Download Expense Report
+    </button>
+  </section>
+
+  <!-- Balances -->
+  <section class="card">
+    <h2>📊 Individual Balances</h2>
+    <div id="balances"></div>
+  </section>
+
+  <!-- Settlements -->
+  <section class="card">
+    <h2>🤝 Who Owes Whom?</h2>
+    <div id="settlements"></div>
+  </section>
+
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+
+  const STORAGE_KEY = "tripBuddyData";
+
+  let state = {
+    people: [],
+    expenses: []
+  };
+
+  // Format amounts in Indian Rupees.
+  function money(amount) {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 2
+    }).format(amount || 0);
+  }
+
+  // Escape user-provided text before displaying it as HTML.
+  function safe(value) {
+    return String(value).replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    })[char]);
+  }
+
+  function newId() {
+    return Date.now().toString(36) +
+      Math.random().toString(36).slice(2, 8);
+  }
+
+  // Save and restore data in this browser.
+  function loadData() {
+    try {
+      const saved = JSON.parse(
+        localStorage.getItem(STORAGE_KEY)
+      );
+
+      if (
+        saved &&
+        Array.isArray(saved.people) &&
+        Array.isArray(saved.expenses)
+      ) {
+        state = saved;
+      }
+    } catch (error) {
+      console.error("Could not load saved data.", error);
+    }
+  }
+
+  function saveData() {
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(state)
+      );
+    } catch (error) {
+      alert("Could not save data in this browser.");
+    }
+
+    render();
+  }
+
+  // Add a friend.
+  function addFriend() {
+    const name = $("friendName").value.trim();
+
+    if (!name) {
+      alert("Please enter a friend's name.");
+      return;
+    }
+
+    const exists = state.people.some(
+      person => person.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if (exists) {
+      alert("This friend already exists.");
+      return;
+    }
+
+    state.people.push({
+      id: newId(),
+      name
+    });
+
+    $("friendName").value = "";
+    saveData();
+  }
+
+  // Calculate payments, shares and balances.
+  function calculate() {
+    const paid = {};
+    const share = {};
+
+    state.people.forEach(person => {
+      paid[person.id] = 0;
+      share[person.id] = 0;
+    });
+
+    let total = 0;
+
+    state.expenses.forEach(expense => {
+      total += expense.amount;
+
+      if (paid[expense.payerId] !== undefined) {
+        paid[expense.payerId] += expense.amount;
+      }
+
+      const members = expense.splitIds.filter(
+        id => share[id] !== undefined
+      );
+
+      if (members.length > 0) {
+        const eachShare = expense.amount / members.length;
+
+        members.forEach(id => {
+          share[id] += eachShare;
+        });
+      }
+    });
+
+    const net = {};
+
+    state.people.forEach(person => {
+      net[person.id] =
+        paid[person.id] - share[person.id];
+    });
+
+    return { total, paid, share, net };
+  }
+
+  // Display friends and expense split options.
+  function renderFriends() {
+    $("friends").innerHTML = state.people.length
+      ? state.people.map(person => `
+          <div class="friend">
+            <strong>${safe(person.name)}</strong>
+            <button
+              class="secondary"
+              data-delete-friend="${person.id}"
+            >Remove</button>
+          </div>
+        `).join("")
+      : '<p class="muted">No friends added yet.</p>';
+
+    $("payer").innerHTML = state.people.map(person => `
+      <option value="${person.id}">
+        ${safe(person.name)}
+      </option>
+    `).join("");
+
+    $("splitPeople").innerHTML = state.people.map(person => `
+      <label>
+        <input type="checkbox" value="${person.id}" checked>
+        ${safe(person.name)}
+      </label>
+    `).join("");
+  }
+
+  // Display all expense records.
+  function renderExpenses() {
+    $("expenses").innerHTML = state.expenses.length
+      ? [...state.expenses].reverse().map(expense => {
+          const payer = state.people.find(
+            person => person.id === expense.payerId
+          );
+
+          return `
+            <div class="expense">
+              <div>
+                <strong>${safe(expense.description)}</strong>
+                <div class="muted">
+                  Paid by: ${safe(payer?.name || "Unknown")}
+                </div>
+                <button
+                  class="secondary"
+                  data-delete-expense="${expense.id}"
+                >Delete</button>
+              </div>
+              <strong>${money(expense.amount)}</strong>
+            </div>
+          `;
+        }).join("")
+      : '<p class="muted">No expenses added yet.</p>';
+  }
+
+  // Calculate and display who should receive or pay money.
+  function renderBalances() {
+    const result = calculate();
+
+    $("balances").innerHTML = state.people.length
+      ? state.people.map(person => {
+          const balance = result.net[person.id];
+
+          let status = "Settled";
+
+          if (balance > 0.005) status = "Gets money back";
+          if (balance < -0.005) status = "Needs to pay";
+
+          return `
+            <div class="balance">
+              <div>
+                <strong>${safe(person.name)}</strong>
+                <div class="muted">
+                  Paid: ${money(result.paid[person.id])}
+                  <br>
+                  Share: ${money(result.share[person.id])}
+                  <br>
+                  ${status}
+                </div>
+              </div>
+
+              <strong class="${
+                balance >= 0 ? "positive" : "negative"
+              }">
+                ${money(balance)}
+              </strong>
+            </div>
+          `;
+        }).join("")
+      : '<p class="muted">Add friends first.</p>';
+
+    // Build suggested settlement transfers.
+    const creditors = state.people
+      .map(person => ({
+        id: person.id,
+        name: person.name,
+        amount: result.net[person.id]
+      }))
+      .filter(person => person.amount > 0.005)
+      .sort((a, b) => b.amount - a.amount);
+
+    const debtors = state.people
+      .map(person => ({
+        id: person.id,
+        name: person.name,
+        amount: -result.net[person.id]
+      }))
+      .filter(person => person.amount > 0.005)
+      .sort((a, b) => b.amount - a.amount);
+
+    const transfers = [];
+    let i = 0;
+    let j = 0;
+
+    while (i < debtors.length && j < creditors.length) {
+      const amount = Math.min(
+        debtors[i].amount,
+        creditors[j].amount
+      );
+
+      if (amount > 0.005) {
+        transfers.push(
+          `${safe(debtors[i].name)} pays ` +
+          `${safe(creditors[j].name)} ${money(amount)}`
+        );
+      }
+
+      debtors[i].amount -= amount;
+      creditors[j].amount -= amount;
+
+      if (debtors[i].amount < 0.005) i++;
+      if (creditors[j].amount < 0.005) j++;
+    }
+
+    $("settlements").innerHTML = transfers.length
+      ? transfers.map(transfer => `
+          <div class="settlement">${transfer}</div>
+        `).join("")
+      : '<p class="muted">No settlements needed yet.</p>';
+
+    $("total").textContent = money(result.total);
+    $("paid").textContent = money(result.total);
+    $("friendCount").textContent = state.people.length;
+    $("expenseCount").textContent = state.expenses.length;
+  }
+
+  function render() {
+    renderFriends();
+    renderExpenses();
+    renderBalances();
+  }
+
+  // Add friend button.
+  $("addFriend").addEventListener("click", addFriend);
+
+  // Add a new expense.
+  $("expenseForm").addEventListener("submit", event => {
+    event.preventDefault();
+
+    const description = $("description").value.trim();
+    const amount = Number($("amount").value);
+    const payerId = $("payer").value;
+
+    const splitIds = [
+      ...$("splitPeople").querySelectorAll("input:checked")
+    ].map(input => input.value);
+
+    if (!state.people.length) {
+      alert("Please add friends first.");
+      return;
+    }
+
+    if (!description || !Number.isFinite(amount) || amount <= 0) {
+      alert("Enter a valid description and amount.");
+      return;
+    }
+
+    if (!payerId || !splitIds.length) {
+      alert("Choose who paid and who shares the expense.");
+      return;
+    }
+
+    state.expenses.push({
+      id: newId(),
+      description,
+      amount,
+      payerId,
+      splitIds,
+      date: new Date().toLocaleDateString("en-IN")
+    });
+
+    $("description").value = "";
+    $("amount").value = "";
+
+    saveData();
+  });
+
+  // Delete a friend or an expense.
+  document.addEventListener("click", event => {
+    const friendButton = event.target.closest(
+      "[data-delete-friend]"
+    );
+
+    if (friendButton) {
+      const friendId = friendButton.dataset.deleteFriend;
+
+      if (!confirm("Remove this friend and their linked expenses?")) {
+        return;
+      }
+
+      state.people = state.people.filter(
+        person => person.id !== friendId
+      );
+
+      state.expenses = state.expenses
+        .filter(expense => expense.payerId !== friendId)
+        .map(expense => ({
+          ...expense,
+          splitIds: expense.splitIds.filter(
+            id => id !== friendId
+          )
+        }));
+
+      saveData();
+    }
+
+    const expenseButton = event.target.closest(
+      "[data-delete-expense]"
+    );
+
+    if (expenseButton) {
+      const expenseId = expenseButton.dataset.deleteExpense;
+
+      if (!confirm("Delete this expense?")) return;
+
+      state.expenses = state.expenses.filter(
+        expense => expense.id !== expenseId
+      );
+
+      saveData();
+    }
+  });
+
+  // Download a simple CSV expense report.
+  $("export").addEventListener("click", () => {
+    const result = calculate();
+
+    const rows = [
+      ["Friend", "Total Paid", "Share", "Net Balance"]
+    ];
+
+    state.people.forEach(person => {
+      rows.push([
+        person.name,
+        result.paid[person.id],
+        result.share[person.id],
+        result.net[person.id]
+      ]);
+    });
+
+    const csv = rows.map(row =>
+      row.map(value =>
+        '"' + String(value).replace(/"/g, '""') + '"'
+      ).join(",")
+    ).join("\r\n");
+
+    const blob = new Blob(
+      ["\uFEFF" + csv],
+      { type: "text/csv;charset=utf-8;" }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "trip-buddy-report.csv";
+    link.click();
+
+    URL.revokeObjectURL(url);
+  });
+
+  // Start the app.
+  loadData();
+  render();
+</script>
+
+</body>
+</html>

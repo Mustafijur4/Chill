@@ -1,0 +1,147 @@
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7f2;
+      color: #46b590;
+    }
+
+    header {
+      background: #3b1237;
+      color: white;
+      padding: 25px 18px;
+      border-radius: 0 0 24px 24px;
+    }
+
+    main {
+      max-width: 760px;
+      margin: auto;
+      padding: 16px;
+    }
+
+    h1 {
+      font-size: 26px;
+    }
+
+    h2 {
+      font-size: 18px;
+    }
+
+    .card {
+      background: white;
+      padding: 16px;
+      margin: 16px 0;
+      border: 1px solid #dfe7e1;
+      border-radius: 16px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric {
+      font-size: 21px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-size: 14px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #dfe7e1;
+      border-radius: 10px;
+      font-size: 16px;
+      background: white;
+    }
+
+    button {
+      padding: 11px 14px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: bold;
+    }
+
+    .primary {
+      background: #1e6653;
+      color: white;
+    }
+
+    .secondary {
+      background: #e8f4ee;
+      color: #123b32;
+    }
+
+    .friend, .expense, .balance {
+      padding: 12px 0;
+      border-bottom: 1px solid #dfe7e1;
+    }
+
+    .expense, .balance {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .muted {
+      color: #66736d;
+      font-size: 13px;
+      margin-top: 5px;
+    }
+
+    .positive {
+      color: #1e6653;
+    }
+
+    .negative {
+      color: #b84343;
+    }
+
+    .settlement {
+      padding: 12px;
+      margin-top: 8px;
+      background: #e8f4ee;
+      border-radius: 10px;
+    }
+
+    .check-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .check-list label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+    }
+
+    .check-list input {
+      width: auto;
+    }
+
+    .full {
+      width: 100%;
+      margin-top: 14px;
+    }
+
+    @media (min-width: 600px) {
+      .summary {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
